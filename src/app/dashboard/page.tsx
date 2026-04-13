@@ -32,31 +32,68 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-white mx-auto"></div>
+          <p className="mt-6 text-2xl text-white font-semibold">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!restaurant) {
+    return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-2xl">Chargement...</div>
+        <div className="text-center">
+          <p className="text-2xl text-red-600">❌ Restaurant introuvable</p>
+          <Button onClick={() => router.push('/auth/login')} className="mt-4">
+            Retour à la connexion
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-800">
-            {restaurant?.name}
-          </h1>
-          <div className="flex gap-2">
-            <Link href="/dashboard/scanner">
-              <Button variant="primary">📷 Scanner</Button>
-            </Link>
-            <Button onClick={() => auth.signOut()} variant="secondary">
-              Déconnexion
-            </Button>
+      {/* Navigation */}
+      <nav className="bg-white shadow-sm sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                🍽️ {restaurant.name}
+              </h1>
+              <div className="flex items-center gap-4 mt-1">
+                <span className="text-sm text-gray-500">
+                  Plan: <span className="font-semibold capitalize text-blue-600">{restaurant.plan}</span>
+                </span>
+                <span className="text-sm text-gray-500">•</span>
+                <span className="text-sm text-gray-500">{restaurant.email}</span>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <Link href="/dashboard/scanner">
+                <Button variant="primary" className="flex items-center gap-2">
+                  📷 Scanner
+                </Button>
+              </Link>
+              <Button 
+                onClick={() => auth.signOut()} 
+                variant="secondary"
+                className="flex items-center gap-2"
+              >
+                🚪 Déconnexion
+              </Button>
+            </div>
           </div>
         </div>
       </nav>
 
+      {/* Contenu principal */}
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Statistiques principales */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card>
             <div className="text-center">
@@ -80,21 +117,97 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card title="Programme de fidélité">
+        {/* Actions rapides */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <Card title="🎁 Programme de fidélité">
             <p className="text-gray-600 mb-4">
-              Configurez votre programme de fidélité
+              Configurez votre programme de fidélité et définissez les récompenses
             </p>
-            <Button>Configurer</Button>
+            <Link href="/dashboard/program">
+              <Button className="w-full">Configurer le programme</Button>
+            </Link>
           </Card>
 
-          <Card title="Scanner QR Code">
+          <Card title="📷 Scanner QR Code">
             <p className="text-gray-600 mb-4">
-              Scannez les cartes de vos clients
+              Scannez les cartes de vos clients pour valider leurs achats
             </p>
             <Link href="/dashboard/scanner">
-              <Button>Ouvrir le scanner</Button>
+              <Button className="w-full">Ouvrir le scanner</Button>
             </Link>
+          </Card>
+        </div>
+
+        {/* Informations supplémentaires */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card title="📍 Informations du restaurant">
+            <div className="space-y-2 text-sm">
+              <p><strong>Adresse :</strong> {restaurant.address}</p>
+              <p><strong>Téléphone :</strong> {restaurant.phone}</p>
+              <p>
+                <strong>Coordonnées GPS :</strong> {restaurant.coordinates.latitude}, {restaurant.coordinates.longitude}
+              </p>
+              <p>
+                <strong>Rayon de proximité :</strong> {restaurant.proximityRadius}m
+              </p>
+            </div>
+          </Card>
+
+          <Card title="🎨 Personnalisation">
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Couleurs du thème</p>
+                <div className="flex gap-3">
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-10 h-10 rounded-lg border-2 border-gray-300"
+                      style={{ backgroundColor: restaurant.colors.primary }}
+                    ></div>
+                    <span className="text-sm text-gray-600">Primaire</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-10 h-10 rounded-lg border-2 border-gray-300"
+                      style={{ backgroundColor: restaurant.colors.secondary }}
+                    ></div>
+                    <span className="text-sm text-gray-600">Secondaire</span>
+                  </div>
+                </div>
+              </div>
+              <Button variant="secondary" className="w-full" disabled>
+                Personnaliser (bientôt)
+              </Button>
+            </div>
+          </Card>
+        </div>
+
+        {/* Aide rapide */}
+        <div className="mt-8">
+          <Card>
+            <h3 className="text-xl font-bold mb-4">🚀 Commencer</h3>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <span className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">1</span>
+                <div>
+                  <p className="font-semibold">Configurez votre programme</p>
+                  <p className="text-sm text-gray-600">Définissez combien d'achats sont nécessaires pour une récompense</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">2</span>
+                <div>
+                  <p className="font-semibold">Inscrivez vos premiers clients</p>
+                  <p className="text-sm text-gray-600">Utilisez le scanner pour créer leurs cartes de fidélité</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">3</span>
+                <div>
+                  <p className="font-semibold">Validez les achats</p>
+                  <p className="text-sm text-gray-600">Scannez le QR code des clients à chaque visite</p>
+                </div>
+              </div>
+            </div>
           </Card>
         </div>
       </div>
