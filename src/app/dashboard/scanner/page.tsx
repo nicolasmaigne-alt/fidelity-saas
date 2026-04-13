@@ -31,15 +31,20 @@ export default function ScannerPage() {
 
     return () => {
       unsubscribe();
-      if (scannerRef.current) {
+      if (scannerRef.current && scanning) {
         stopScanning();
       }
     };
-  }, [router]);
+  }, [router, scanning]);
 
   const startScanning = async () => {
+    setError(null);
+    
     try {
-      setError(null);
+      // Vérifier les permissions
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(track => track.stop());
+      
       const scanner = new Html5Qrcode('qr-reader');
       scannerRef.current = scanner;
 
@@ -50,6 +55,7 @@ export default function ScannerPage() {
           qrbox: { width: 250, height: 250 },
         },
         (decodedText) => {
+          console.log('QR Code détecté:', decodedText);
           setResult(decodedText);
           stopScanning();
         },
@@ -60,8 +66,17 @@ export default function ScannerPage() {
 
       setScanning(true);
     } catch (err: any) {
-      setError('Impossible d\'accéder à la caméra. Vérifiez les permissions.');
-      console.error(err);
+      console.error('Erreur caméra:', err);
+      
+      if (err.name === 'NotAllowedError') {
+        setError('❌ Permission refusée. Autorisez l\'accès à la caméra dans les paramètres de votre navigateur.');
+      } else if (err.name === 'NotFoundError') {
+        setError('❌ Aucune caméra détectée sur cet appareil.');
+      } else if (err.name === 'NotReadableError') {
+        setError('❌ La caméra est déjà utilisée par une autre application.');
+      } else {
+        setError(`❌ Erreur : ${err.message || 'Impossible d\'accéder à la caméra'}`);
+      }
     }
   };
 
@@ -70,8 +85,9 @@ export default function ScannerPage() {
       try {
         await scannerRef.current.stop();
         scannerRef.current.clear();
+        scannerRef.current = null;
       } catch (err) {
-        console.error('Error stopping scanner:', err);
+        console.error('Erreur arrêt scanner:', err);
       }
     }
     setScanning(false);
@@ -97,11 +113,17 @@ export default function ScannerPage() {
         setSuccess(null);
       }, 3000);
     } catch (err: any) {
-      setError(err.message);
+      setError(`❌ ${err.message}`);
     }
   };
 
-  if (!userId) return <div className="min-h-screen flex items-center justify-center">Chargement...</div>;
+  if (!userId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -117,28 +139,41 @@ export default function ScannerPage() {
       <div className="max-w-2xl mx-auto px-4 py-8">
         <Card>
           <div className="space-y-4">
+            {/* Zone de scan */}
             <div 
               id="qr-reader" 
               className={`${scanning ? 'block' : 'hidden'} w-full rounded-lg overflow-hidden border-4 border-blue-500`}
             />
 
+            {/* Boutons de contrôle */}
             {!scanning && !result && (
-              <Button onClick={startScanning} variant="primary" className="w-full text-lg py-4">
+              <Button 
+                onClick={startScanning} 
+                variant="primary" 
+                className="w-full text-lg py-4 bg-gradient-to-r from-blue-600 to-purple-600"
+              >
                 📷 Ouvrir la caméra
               </Button>
             )}
 
             {scanning && (
-              <Button onClick={stopScanning} variant="danger" className="w-full">
+              <Button 
+                onClick={stopScanning} 
+                variant="danger" 
+                className="w-full text-lg py-4"
+              >
                 ⏹️ Arrêter le scan
               </Button>
             )}
 
+            {/* Résultat du scan */}
             {result && (
               <div className="space-y-4">
                 <div className="bg-green-50 p-4 rounded-lg border-2 border-green-500">
-                  <p className="text-green-800 font-semibold">✅ QR Code scanné !</p>
-                  <p className="text-sm text-green-600 mt-1 font-mono break-all">{result}</p>
+                  <p className="text-green-800 font-semibold text-lg">✅ QR Code scanné avec succès !</p>
+                  <p className="text-sm text-green-600 mt-2 font-mono break-all bg-white p-2 rounded">
+                    {result}
+                  </p>
                 </div>
 
                 <div>
@@ -150,45 +185,85 @@ export default function ScannerPage() {
                     value={productName}
                     onChange={(e) => setProductName(e.target.value)}
                     placeholder="Ex: Pizza, Burger, Café..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-lg"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg"
                     autoFocus
                   />
                 </div>
 
                 <div className="flex gap-2">
-                  <Button onClick={handleValidatePurchase} variant="primary" className="flex-1 text-lg py-3">
+                  <Button 
+                    onClick={handleValidatePurchase} 
+                    variant="primary" 
+                    className="flex-1 text-lg py-3 bg-gradient-to-r from-green-600 to-green-700"
+                  >
                     ✅ Valider l'achat
                   </Button>
-                  <Button onClick={() => { setResult(null); setProductName(''); }} variant="secondary" className="py-3">
-                    ❌ Annuler
+                  <Button 
+                    onClick={() => { 
+                      setResult(null); 
+                      setProductName(''); 
+                      setError(null);
+                    }} 
+                    variant="secondary" 
+                    className="py-3 px-6"
+                  >
+                    ❌
                   </Button>
                 </div>
               </div>
             )}
 
+            {/* Messages */}
             {error && (
               <div className="bg-red-50 p-4 rounded-lg border-2 border-red-500">
-                <p className="text-red-800 font-semibold">❌ {error}</p>
+                <p className="text-red-800 font-semibold">{error}</p>
+                
+                {error.includes('Permission refusée') && (
+                  <div className="mt-3 text-sm text-red-700">
+                    <p className="font-semibold mb-2">Comment autoriser la caméra :</p>
+                    <ol className="list-decimal list-inside space-y-1">
+                      <li>Cliquez sur le cadenas 🔒 dans la barre d'adresse</li>
+                      <li>Cliquez sur "Paramètres du site"</li>
+                      <li>Autorisez l'accès à la caméra</li>
+                      <li>Rechargez la page</li>
+                    </ol>
+                  </div>
+                )}
               </div>
             )}
 
             {success && (
-              <div className="bg-green-50 p-4 rounded-lg border-2 border-green-500">
-                <p className="text-green-800 font-semibold">{success}</p>
+              <div className="bg-green-50 p-4 rounded-lg border-2 border-green-500 animate-pulse">
+                <p className="text-green-800 font-semibold text-lg">{success}</p>
               </div>
             )}
 
-            {!result && (
+            {/* Instructions */}
+            {!result && !scanning && (
               <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
-                <p className="text-blue-800 text-sm">
-                  <strong>💡 Instructions :</strong><br />
-                  1. Cliquez sur "Ouvrir la caméra"<br />
-                  2. Scannez le QR code du client<br />
-                  3. Indiquez le produit acheté<br />
-                  4. Validez l'achat
+                <p className="text-blue-800 text-sm leading-relaxed">
+                  <strong className="text-lg">💡 Instructions :</strong>
+                  <br /><br />
+                  <strong>1.</strong> Cliquez sur "Ouvrir la caméra"
+                  <br />
+                  <strong>2.</strong> Autorisez l'accès à la caméra si demandé
+                  <br />
+                  <strong>3.</strong> Pointez vers le QR code du client
+                  <br />
+                  <strong>4.</strong> Le scan se fait automatiquement
+                  <br />
+                  <strong>5.</strong> Indiquez le produit acheté
+                  <br />
+                  <strong>6.</strong> Validez l'achat
                 </p>
               </div>
             )}
+
+            {/* Infos système */}
+            <div className="bg-gray-50 p-3 rounded border text-xs text-gray-600">
+              <p><strong>Navigateur :</strong> {navigator.userAgent.includes('Chrome') ? 'Chrome' : navigator.userAgent.includes('Safari') ? 'Safari' : 'Autre'}</p>
+              <p><strong>HTTPS :</strong> {window.location.protocol === 'https:' ? '✅ Oui' : '❌ Non (requis pour la caméra)'}</p>
+            </div>
           </div>
         </Card>
       </div>
