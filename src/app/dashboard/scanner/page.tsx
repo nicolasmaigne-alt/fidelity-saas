@@ -7,7 +7,6 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import Link from 'next/link';
-import { Html5Qrcode } from 'html5-qrcode';
 import { scanQRCode } from '@/lib/firebase/loyalty';
 
 export default function ScannerPage() {
@@ -18,7 +17,17 @@ export default function ScannerPage() {
   const [productName, setProductName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const [manualMode, setManualMode] = useState(false);
+  const [manualInput, setManualInput] = useState('');
+  const scannerRef = useRef<any>(null);
+  const [Html5Qrcode, setHtml5Qrcode] = useState<any>(null);
+
+  useEffect(() => {
+    // Charger la librairie dynamiquement
+    import('html5-qrcode').then((module) => {
+      setHtml5Qrcode(() => module.Html5Qrcode);
+    });
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -31,51 +40,60 @@ export default function ScannerPage() {
 
     return () => {
       unsubscribe();
-      if (scannerRef.current && scanning) {
-        stopScanning();
-      }
+      stopScanning();
     };
-  }, [router, scanning]);
+  }, [router]);
 
   const startScanning = async () => {
+    if (!Html5Qrcode) {
+      setError('❌ Scanner en cours de chargement, réessayez dans 1 seconde...');
+      setTimeout(() => setError(null), 2000);
+      return;
+    }
+
     setError(null);
+    setScanning(true);
+
+    // Attendre que le DOM soit prêt
+    await new Promise(resolve => setTimeout(resolve, 100));
     
     try {
-      // Vérifier les permissions
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach(track => track.stop());
-      
       const scanner = new Html5Qrcode('qr-reader');
       scannerRef.current = scanner;
 
+      const qrCodeSuccessCallback = (decodedText: string) => {
+        console.log('QR Code scanné:', decodedText);
+        setResult(decodedText);
+        stopScanning();
+      };
+
+      const config = {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+      };
+
       await scanner.start(
         { facingMode: 'environment' },
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-        },
-        (decodedText) => {
-          console.log('QR Code détecté:', decodedText);
-          setResult(decodedText);
-          stopScanning();
-        },
-        () => {
-          // Ignorer les erreurs de scan continues
-        }
+        config,
+        qrCodeSuccessCallback,
+        () => {} // Ignorer les erreurs de scan
       );
 
-      setScanning(true);
+      console.log('Scanner démarré avec succès');
     } catch (err: any) {
-      console.error('Erreur caméra:', err);
+      console.error('Erreur scanner:', err);
+      setScanning(false);
       
       if (err.name === 'NotAllowedError') {
-        setError('❌ Permission refusée. Autorisez l\'accès à la caméra dans les paramètres de votre navigateur.');
+        setError('❌ Permission caméra refusée. Autorisez l\'accès dans les paramètres.');
       } else if (err.name === 'NotFoundError') {
-        setError('❌ Aucune caméra détectée sur cet appareil.');
-      } else if (err.name === 'NotReadableError') {
-        setError('❌ La caméra est déjà utilisée par une autre application.');
+        setError('❌ Aucune caméra trouvée.');
+      } else if (err.toString().includes('Camera already in use')) {
+        setError('❌ Caméra déjà utilisée. Fermez les autres onglets utilisant la caméra.');
+        // Forcer le nettoyage
+        stopScanning();
       } else {
-        setError(`❌ Erreur : ${err.message || 'Impossible d\'accéder à la caméra'}`);
+        setError(`❌ Erreur: ${err.message || err.toString()}`);
       }
     }
   };
@@ -83,19 +101,24 @@ export default function ScannerPage() {
   const stopScanning = async () => {
     if (scannerRef.current) {
       try {
-        await scannerRef.current.stop();
+        const isScanning = scannerRef.current.getState();
+        if (isScanning === 2) { // SCANNING
+          await scannerRef.current.stop();
+        }
         scannerRef.current.clear();
-        scannerRef.current = null;
       } catch (err) {
-        console.error('Erreur arrêt scanner:', err);
+        console.error('Erreur arrêt:', err);
       }
+      scannerRef.current = null;
     }
     setScanning(false);
   };
 
   const handleValidatePurchase = async () => {
-    if (!result || !productName || !userId) {
-      setError('Veuillez remplir le nom du produit');
+    const qrCodeToUse = manualMode ? manualInput : result;
+
+    if (!qrCodeToUse || !productName || !userId) {
+      setError('Veuillez remplir tous les champs');
       return;
     }
 
@@ -103,14 +126,15 @@ export default function ScannerPage() {
     setSuccess(null);
 
     try {
-      const updatedCard = await scanQRCode(result, userId, productName);
+      const updatedCard = await scanQRCode(qrCodeToUse, userId, productName);
       
-      setSuccess(`✅ Achat validé ! Le client a maintenant ${updatedCard.purchaseCount}/10 achats.`);
+      setSuccess(`✅ Achat validé ! Client : ${updatedCard.purchaseCount}/10 achats.`);
       
       setTimeout(() => {
         setResult(null);
         setProductName('');
         setSuccess(null);
+        setManualInput('');
       }, 3000);
     } catch (err: any) {
       setError(`❌ ${err.message}`);
@@ -139,53 +163,96 @@ export default function ScannerPage() {
       <div className="max-w-2xl mx-auto px-4 py-8">
         <Card>
           <div className="space-y-4">
-            {/* Zone de scan */}
-            <div 
-              id="qr-reader" 
-              className={`${scanning ? 'block' : 'hidden'} w-full rounded-lg overflow-hidden border-4 border-blue-500`}
-            />
-
-            {/* Boutons de contrôle */}
+            {/* Choix du mode */}
             {!scanning && !result && (
-              <Button 
-                onClick={startScanning} 
-                variant="primary" 
-                className="w-full text-lg py-4 bg-gradient-to-r from-blue-600 to-purple-600"
-              >
-                📷 Ouvrir la caméra
-              </Button>
+              <div className="flex gap-2 mb-4">
+                <Button
+                  onClick={() => setManualMode(false)}
+                  variant={!manualMode ? 'primary' : 'secondary'}
+                  className="flex-1"
+                >
+                  📷 Scanner
+                </Button>
+                <Button
+                  onClick={() => setManualMode(true)}
+                  variant={manualMode ? 'primary' : 'secondary'}
+                  className="flex-1"
+                >
+                  ⌨️ Saisie manuelle
+                </Button>
+              </div>
             )}
 
-            {scanning && (
-              <Button 
-                onClick={stopScanning} 
-                variant="danger" 
-                className="w-full text-lg py-4"
-              >
-                ⏹️ Arrêter le scan
-              </Button>
+            {/* Mode Scanner */}
+            {!manualMode && (
+              <>
+                <div 
+                  id="qr-reader" 
+                  className={`${scanning ? 'block' : 'hidden'} w-full rounded-lg overflow-hidden`}
+                  style={{ minHeight: '300px' }}
+                />
+
+                {!scanning && !result && (
+                  <Button 
+                    onClick={startScanning} 
+                    variant="primary" 
+                    className="w-full text-lg py-4"
+                    disabled={!Html5Qrcode}
+                  >
+                    {Html5Qrcode ? '📷 Ouvrir la caméra' : '⏳ Chargement du scanner...'}
+                  </Button>
+                )}
+
+                {scanning && (
+                  <Button 
+                    onClick={stopScanning} 
+                    variant="danger" 
+                    className="w-full text-lg py-4"
+                  >
+                    ⏹️ Arrêter le scan
+                  </Button>
+                )}
+              </>
             )}
 
-            {/* Résultat du scan */}
-            {result && (
+            {/* Mode Manuel */}
+            {manualMode && !result && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Code de la carte (commence par LOYALTY-)
+                </label>
+                <input
+                  type="text"
+                  value={manualInput}
+                  onChange={(e) => setManualInput(e.target.value)}
+                  placeholder="LOYALTY-xxxxx-xxxxx"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-lg font-mono"
+                />
+              </div>
+            )}
+
+            {/* Résultat */}
+            {(result || (manualMode && manualInput)) && (
               <div className="space-y-4">
-                <div className="bg-green-50 p-4 rounded-lg border-2 border-green-500">
-                  <p className="text-green-800 font-semibold text-lg">✅ QR Code scanné avec succès !</p>
-                  <p className="text-sm text-green-600 mt-2 font-mono break-all bg-white p-2 rounded">
-                    {result}
-                  </p>
-                </div>
+                {result && (
+                  <div className="bg-green-50 p-4 rounded-lg border-2 border-green-500">
+                    <p className="text-green-800 font-semibold">✅ QR Code scanné !</p>
+                    <p className="text-sm text-green-600 mt-1 font-mono break-all">
+                      {result}
+                    </p>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Quel produit le client a-t-il acheté ?
+                    Produit acheté
                   </label>
                   <input
                     type="text"
                     value={productName}
                     onChange={(e) => setProductName(e.target.value)}
-                    placeholder="Ex: Pizza, Burger, Café..."
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg"
+                    placeholder="Pizza, Burger, Café..."
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-lg"
                     autoFocus
                   />
                 </div>
@@ -194,7 +261,7 @@ export default function ScannerPage() {
                   <Button 
                     onClick={handleValidatePurchase} 
                     variant="primary" 
-                    className="flex-1 text-lg py-3 bg-gradient-to-r from-green-600 to-green-700"
+                    className="flex-1 text-lg py-3"
                   >
                     ✅ Valider l'achat
                   </Button>
@@ -203,9 +270,10 @@ export default function ScannerPage() {
                       setResult(null); 
                       setProductName(''); 
                       setError(null);
+                      setManualInput('');
                     }} 
                     variant="secondary" 
-                    className="py-3 px-6"
+                    className="px-6"
                   >
                     ❌
                   </Button>
@@ -216,54 +284,24 @@ export default function ScannerPage() {
             {/* Messages */}
             {error && (
               <div className="bg-red-50 p-4 rounded-lg border-2 border-red-500">
-                <p className="text-red-800 font-semibold">{error}</p>
-                
-                {error.includes('Permission refusée') && (
-                  <div className="mt-3 text-sm text-red-700">
-                    <p className="font-semibold mb-2">Comment autoriser la caméra :</p>
-                    <ol className="list-decimal list-inside space-y-1">
-                      <li>Cliquez sur le cadenas 🔒 dans la barre d'adresse</li>
-                      <li>Cliquez sur "Paramètres du site"</li>
-                      <li>Autorisez l'accès à la caméra</li>
-                      <li>Rechargez la page</li>
-                    </ol>
-                  </div>
-                )}
+                <p className="text-red-800">{error}</p>
               </div>
             )}
 
             {success && (
-              <div className="bg-green-50 p-4 rounded-lg border-2 border-green-500 animate-pulse">
+              <div className="bg-green-50 p-4 rounded-lg border-2 border-green-500">
                 <p className="text-green-800 font-semibold text-lg">{success}</p>
               </div>
             )}
 
             {/* Instructions */}
-            {!result && !scanning && (
+            {!result && !scanning && !manualMode && (
               <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
-                <p className="text-blue-800 text-sm leading-relaxed">
-                  <strong className="text-lg">💡 Instructions :</strong>
-                  <br /><br />
-                  <strong>1.</strong> Cliquez sur "Ouvrir la caméra"
-                  <br />
-                  <strong>2.</strong> Autorisez l'accès à la caméra si demandé
-                  <br />
-                  <strong>3.</strong> Pointez vers le QR code du client
-                  <br />
-                  <strong>4.</strong> Le scan se fait automatiquement
-                  <br />
-                  <strong>5.</strong> Indiquez le produit acheté
-                  <br />
-                  <strong>6.</strong> Validez l'achat
+                <p className="text-blue-800 text-sm">
+                  <strong>💡 Astuce :</strong> Si le scanner ne fonctionne pas, utilisez le mode "Saisie manuelle" et tapez le code visible sous le QR code du client.
                 </p>
               </div>
             )}
-
-            {/* Infos système */}
-            <div className="bg-gray-50 p-3 rounded border text-xs text-gray-600">
-              <p><strong>Navigateur :</strong> {navigator.userAgent.includes('Chrome') ? 'Chrome' : navigator.userAgent.includes('Safari') ? 'Safari' : 'Autre'}</p>
-              <p><strong>HTTPS :</strong> {window.location.protocol === 'https:' ? '✅ Oui' : '❌ Non (requis pour la caméra)'}</p>
-            </div>
           </div>
         </Card>
       </div>
