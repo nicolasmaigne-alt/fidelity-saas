@@ -117,8 +117,8 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Actions rapides */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Actions rapides - 3 CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card title="🎁 Programme de fidélité">
             <p className="text-gray-600 mb-4">
               Configurez votre programme de fidélité et définissez les récompenses
@@ -134,6 +134,15 @@ export default function DashboardPage() {
             </p>
             <Link href="/dashboard/scanner">
               <Button className="w-full">Ouvrir le scanner</Button>
+            </Link>
+          </Card>
+
+          <Card title="📱 QR Code d'inscription">
+            <p className="text-gray-600 mb-4">
+              Générez le QR code pour que vos clients s'inscrivent facilement
+            </p>
+            <Link href="/dashboard/qrcode">
+              <Button className="w-full">Générer le QR Code</Button>
             </Link>
           </Card>
         </div>
@@ -184,7 +193,7 @@ export default function DashboardPage() {
         {/* Aide rapide */}
         <div className="mt-8">
           <Card>
-            <h3 className="text-xl font-bold mb-4">🚀 Commencer</h3>
+            <h3 className="text-xl font-bold mb-4">🚀 Démarrage rapide</h3>
             <div className="space-y-3">
               <div className="flex items-start gap-3">
                 <span className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">1</span>
@@ -196,15 +205,22 @@ export default function DashboardPage() {
               <div className="flex items-start gap-3">
                 <span className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">2</span>
                 <div>
-                  <p className="font-semibold">Inscrivez vos premiers clients</p>
-                  <p className="text-sm text-gray-600">Utilisez le scanner pour créer leurs cartes de fidélité</p>
+                  <p className="font-semibold">Générez votre QR code d'inscription</p>
+                  <p className="text-sm text-gray-600">Imprimez-le et affichez-le dans votre restaurant</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <span className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">3</span>
                 <div>
+                  <p className="font-semibold">Vos clients s'inscrivent</p>
+                  <p className="text-sm text-gray-600">Ils scannent le QR code et créent leur carte virtuelle</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">4</span>
+                <div>
                   <p className="font-semibold">Validez les achats</p>
-                  <p className="text-sm text-gray-600">Scannez le QR code des clients à chaque visite</p>
+                  <p className="text-sm text-gray-600">Scannez le QR code personnel des clients à chaque visite</p>
                 </div>
               </div>
             </div>
